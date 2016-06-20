@@ -1,0 +1,10 @@
+sample	condition	A
+control-1	control	control-1.tsv
+control-2	control	control-2.tsv
+control-3	control	control-3.tsv
+treatA-1	treatA	treatA-1.tsv
+treatA-2	treatA	treatA-2.tsv
+treatA-3	treatA	treatA-3.tsv
+treatB-1	treatB	treatB-1.tsv
+treatB-2	treatB	treatB-2.tsv
+treatB-3	treatB	treatB-3.tsv

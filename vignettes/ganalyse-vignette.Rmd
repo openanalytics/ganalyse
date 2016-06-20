@@ -1,0 +1,233 @@
+---
+title: "ganalyse vignette"
+date: "`r Sys.Date()`"
+output: 
+  rmarkdown::html_document:
+    theme: spacelab
+    highlight: pygments
+    css : css/bootstrap.css
+vignette: >
+  %\VignetteIndexEntry{ganalyse vignette}
+  %\VignetteEngine{knitr::rmarkdown}
+  \usepackage[utf8]{inputenc}
+---
+
+```{r, echo = FALSE, message = FALSE}
+require(ganalyse)
+knitr::opts_chunk$set(
+  comment = "#",
+  error = FALSE,
+  tidy = FALSE,
+  cache = FALSE,
+  collapse=TRUE)
+# options(datatable.auto.index=FALSE)
+```
+
+We've developed three packages for performing differential analysis of NGS 
+data, namely `gread`, `gcount` and `ganalyse`. In short,
+
+* *gread* enables loading or reading in the required data quickly from many 
+different formats in which NGS data and gene annotations are available. 
+
+* *gcount* counts the reads depending on user configuration on *raw* counts.
+
+* *ganalyse* then allows to perform differential gene expression analysis 
+using many methods such as *limma*, *voomlimma* (for `FPKM`), *edger* on the 
+read counts.
+
+In this vignette, we'll discuss the `gread` package.
+
+***
+
+## ganalyse package
+
+`ganalyse` is an R package that aims to make analysis on genomics data easy. 
+It is implemented only for RNA-Seq data at the moment.
+
+The current organisation is as follows:
+
+* Provide `experiment`, `sample_info` and `format` to the function `rnaseq` to 
+generate an object of class `fpkm` or `raw`.
+
+* Collect counts using `gather_counts` to load the corresponding count data 
+for the samples. It returns an object of class `fpkm_counts` or `raw_counts` 
+respectively.
+
+* Construct `design matrix` and `contrasts`. See `construct_design` and 
+`construct_contrasts`.
+
+* Perform different types on analyses (only Differential Gene Expression (DGE) 
+analysis is supported currently) on the `fpkm_counts` or `raw_counts` object.
+
+For `fpkm_counts` object, use `limma_dge` to perform DGE analysis. Similarly, 
+for `raw_counts` object, use `limma_dge` or `edger_dge` methods.
+
+## Setting up the experiment
+
+The function `rnaseq()` can be used to set up the experiment. It returns an 
+object of class `raw` or `fpkm` depending on the value provided to the 
+argument `format`.
+
+```{r}
+# ----- fpkm ----- #
+(fpkm_obj = rnaseq(sample_info="example/fpkm/annotation.txt", 
+                format="fpkm", experiment="test"))
+class(fpkm_obj) # [1] "fpkm"  "data.table" "data.frame"
+
+# ----- raw ----- #
+(raw_obj = rnaseq(sample_info="example/raw/annotation.txt", 
+                format="raw", experiment="test"))
+class(raw_obj) # [1] "raw"  "data.table" "data.frame"
+```
+
+#### Note that: {.bs-callout .bs-callout-info}
+
+* The `experiment` argument is optional with a default value is *"example"*.
+
+* The argument `sample_info` accepts a path to file containing sample info. 
+The columns `sample` and `path` *should* be present. 
+
+    It usually also contains the treatments and groups each sample belong to. 
+    It is essential to perform DE analysis later on, although those details 
+    can be added later on.
+
+* `format` can take values either `fpkm` (*default*) or `raw`.
+
+## Gather counts from all samples
+
+This can be done using `gather_counts` function which has methods for objects 
+of class `fpkm` and `raw`. It returns an object of class `fpkm_counts` and 
+`raw_counts` respectively.
+
+```{r}
+# ----- fpkm ----- #
+(fpkm_counts = gather_counts(fpkm_obj, by="gene-id", log_base=2L))
+class(fpkm_counts) # [1] "fpkm_counts" "fpkm" "data.table"  "data.frame"
+
+# ----- raw ----- #
+(raw_counts = gather_counts(raw_obj, by="gene-id", threshold=1L))
+class(raw_counts) # [1] "raw_counts" "raw" "data.table" "data.frame"
+```
+
+#### {.bs-callout .bs-callout-info}
+
+* Other possible values for `by` argument are `gene-name` and `transcript-id`. 
+It is used to identify the column by which to aggregate by to get effective 
+total count. For example, in case of `fpkm` counts, transcript level fpkm 
+values are available. But if gene level DE analysis is desired, `by='gene-id'` 
+can be used in which case the *total expression* for each gene id would be 
+obtained while gathering counts.
+
+    Note that `transcript-id` is only valid for `fpkm` objects.
+
+* `threshold` is set to the default value of `1` for *raw* counts. It 
+indicates the `RPKM` value that the average RPKM value of all the samples for 
+each gene should be greater than for it to be retained for further analyses. 
+The higher this value, the more stringent the filtering.
+
+    The default `threshold` value for *fpkm* values is `0.1`.
+
+* `log_base` allows to obtain log of the raw counts / fpkm values. It is 
+generally recommended to use log transformed `fpkm` values while using 
+packages that are designed to work with counts (e.g., `limma`).
+
+## Inspect counts
+
+To inspect the counts, `show_counts` function can be used. It returns a 
+`data.table` object.
+
+```{r}
+# ----- fpkm ----- #
+head(show_counts(fpkm_counts))
+
+# ----- raw ----- #
+head(show_counts(raw_counts))
+```
+
+We can also generate density plots of counts facetted by the groups each 
+sample belongs to using `density_plot()`:
+
+```{r}
+# ----- ggplot2 ----- #
+density_plot(raw_counts, title="Density plot of raw counts", 
+    groups="condition", facet_cols=1L)
+```
+
+Interactive plots can be genearted using `interactive=TRUE`.
+
+```{r}
+# ----- plotly plot ----- #
+pl = density_plot(raw_counts, title="Density plot of raw counts", 
+        groups="condition", facet_cols=1L)
+ll = htmltools::tagList()
+ll[[1L]] = plotly::as.widget(pl)
+ll
+```
+
+## Perform DGE analysis
+
+We can perform DGE analysis using `limma` or `edgeR` bioconductor packages. 
+The corresponding functions are `limma_dge` and `edger_dge` respectively. 
+For raw counts, both these methods exist. For fpkm, only `limma` method is 
+implemented.
+
+To perform *differential expression* analysis, we need two have two more 
+things -- a) design matrix, and b) contrasts. It can be constructed using 
+`construct_design()` and `construct_contrasts()` functions. 
+
+These are simple wrappers to `stats::model.matrix` and `limma::makeContrasts` 
+functions.
+
+```{r}
+design = construct_design(raw_counts, formula = ~ 0 + condition)
+contrasts = construct_contrasts(design, 
+                A.vs.control = conditiontreatA-conditioncontrol,
+                B.vs.control = conditiontreatB-conditioncontrol)
+
+# ----- fpkm ----- #
+# A vs control
+(fpkm_dge = limma_dge(fpkm_counts, design, contrast=contrasts[, 1]))
+
+# ----- raw ----- #
+# B vs control
+(raw_dge = limma_dge(raw_counts, design, contrast=contrasts[, "B.vs.control"]))
+```
+
+The usage for `edger_dge` is identical. Both these functions returns a `dge` 
+object which can be directly passed to other function for generating plots 
+as shown below.
+
+## Volcano plot
+
+*Volcano plot* can be generated using `volcano_plot()` function.
+
+```{r}
+# ----- ggplot2 plot ----- # 
+volcano_plot(fpkm_dge, title="treatA vs Control")
+```
+
+Interactive plots can be generated using `plotly` package with the help of 
+the argument `interactive`.
+
+```{r}
+# ----- plotly plot ----- #
+pl = volcano_plot(raw_dge, title="treatB vs Control", interactive=TRUE)
+ll = htmltools::tagList()
+ll[[1L]] = plotly::as.widget(pl)
+ll
+```
+
+By providing a file name, the plot is saved to the file provided, and the 
+plot object is returned.
+
+```{r, eval=FALSE}
+# save to file and return the object, *not* run 
+volcano_plot(fpkm_dge, filename="~/treatA_vs_control.png")
+```
+
+Have a look at `?volcano_plot` for more.
+
+#
+
+***
+

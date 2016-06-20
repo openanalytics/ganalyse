@@ -1,0 +1,10 @@
+A	condition	path
+control-1	control	control-1.genes.fpkm_tracking
+control-2	control	control-2.genes.fpkm_tracking
+control-3	control	control-3.genes.fpkm_tracking
+treatA-1	treatA	treatA-1.genes.fpkm_tracking
+treatA-2	treatA	treatA-2.genes.fpkm_tracking
+treatA-3	treatA	treatA-3.genes.fpkm_tracking
+treatB-1	treatB	treatB-1.genes.fpkm_tracking
+treatB-2	treatB	treatB-2.genes.fpkm_tracking
+treatB-3	treatB	treatB-3.genes.fpkm_tracking

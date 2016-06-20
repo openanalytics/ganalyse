@@ -1,0 +1,203 @@
+# This file should be clean of non-ASCII characters; e.g. CRAN Solaris
+# Use:  grep --color='auto' -P -n "[\x80-\xFF]" tests.Rraw
+if (!exists("test_ganalyse", .GlobalEnv, inherits=FALSE)) {
+    require(ganalyse)   # in dev the package should not be loaded
+    options(warn=0L) # use require() to warn but not halt if not available
+    .devtesting=FALSE
+
+    test    = ganalyse:::test
+    is.fpkm = ganalyse:::is.fpkm
+    is.raw  = ganalyse:::is.raw 
+} else {
+    .devtesting=TRUE
+}
+
+sugg_pkgs = c("data.table", "gread", "gcount", "ggplot2", "RColorBrewer", 
+                "plotly", "ggrepel", "Biobase", "limma", "edgeR", 
+                "esetVis", "DESeq2")
+inst_pkgs = rownames(installed.packages())
+lapply(setNames(sugg_pkgs, nm = sugg_pkgs), function(pkg) if(pkg %in% 
+    inst_pkgs) require(pkg, character.only=TRUE))
+
+INT = function(...) as.integer(c(...))
+
+options(warn=2L)
+nfail = ntest = lastnum = 0L
+whichfail = NULL
+.timingtests = FALSE
+started.at = Sys.time()
+
+## rnaseq ----------------------------------------------------
+fpkm_info = "./fpkm/annotation.txt"
+fpkm_obj = rnaseq(fpkm_info, format="fpkm")
+
+test(1.1, rnaseq(fpkm_info, experiment=1L), error="must be a ")
+test(1.2, rnaseq(fpkm_info, experiment=NA), error="must be a ")
+test(1.3, rnaseq(fpkm_info, format="x"), error="should be one of ")
+test(1.4, rnaseq("./fpkm/error-1.txt"), error="not found in")
+test(1.5, rnaseq("./fpkm/error-2.txt"), error="must be unique")
+test(1.6, class(fpkm_obj), c("fpkm", "data.table", "data.frame"))
+test(1.7, is.fpkm(fpkm_obj), TRUE)
+
+raw_info = "./raw/annotation.txt"
+raw_obj = rnaseq(raw_info, format="raw")
+
+test(1.8, rnaseq(raw_info, experiment=1L), error="must be a ")
+test(1.9, rnaseq(raw_info, experiment=NA), error="must be a ")
+test(1.10, rnaseq(raw_info, format="x"), error="should be one of ")
+test(1.11, rnaseq("./raw/error-1.txt"), error="not found in")
+test(1.12, rnaseq("./raw/error-2.txt"), error="Files corresponding")
+test(1.13, class(raw_obj), c("raw", "data.table", "data.frame"))
+test(1.14, is.raw(raw_obj), TRUE)
+
+## gather_counts ---------------------------------------------
+fpkm_counts = gather_counts(fpkm_obj, by="gene-id", log_base=2L)
+
+fpkm_gene_name = gather_counts(fpkm_obj, by="gene-name", threshold=0L)
+fpkm_trpt_name = gather_counts(fpkm_obj, by="transcript-id", threshold=0L)
+ans1 = fread("./fpkm/control-1.genes.fpkm_tracking", select="gene_short_name")
+ans2 = fread("./fpkm/control-1.genes.fpkm_tracking", select="tracking_id")
+
+test(2.1, gather_counts(fpkm_obj, by="gene-id", threshold=-2), error="thres")
+test(2.2, gather_counts(fpkm_obj, by="gene-id", log_base=-1), error="finite")
+test(2.3, gather_counts(fpkm_obj, by="gene"), error="should be one ")
+test(2.4, names(fpkm_counts), c(names(fpkm_obj), "counts"))
+test(2.5, class(fpkm_counts), c("fpkm_counts", class(fpkm_obj)))
+test(2.6, fpkm_gene_name[["counts"]][[1L]][["id"]], unique(ans1[[1L]]))
+test(2.7, fpkm_trpt_name[["counts"]][[1L]][["id"]], unique(ans2[[1L]]))
+
+raw_counts = gather_counts(raw_obj, by="gene-id")
+
+test(2.8, gather_counts(raw_obj, by="gene-id", threshold=-2), error="thres")
+test(2.9, gather_counts(raw_obj, by="gene-id", log_base=-1), error="finite")
+test(2.10, gather_counts(raw_obj, by="gene"), error="should be one ")
+test(2.11, names(raw_counts), c(names(raw_obj), "counts"))
+test(2.12, class(raw_counts), c("raw_counts", class(raw_obj)))
+test(2.13, gather_counts(raw_obj, by="gene-name", threshold=0L), 
+            error="not found")
+
+## show_counts -----------------------------------------------
+test(3.1, names(show_counts(fpkm_counts)), c("id", fpkm_obj[["sample"]]))
+test(3.2, names(show_counts(raw_counts)), c("id", raw_obj[["sample"]]))
+test(3.3, class(show_counts(fpkm_counts)), c("data.table", "data.frame"))
+test(3.4, class(show_counts(raw_counts)), c("data.table", "data.frame"))
+
+## design ----------------------------------------------------
+design1 = construct_design(fpkm_counts, ~0+condition)
+design2 = construct_design(fpkm_counts, "~0+condition")
+design3 = construct_design(fpkm_obj, ~0+condition)
+design4 = construct_design(fpkm_obj, "~0+condition")
+test(4.1, design1, design2)
+test(4.2, design1, design3)
+test(4.3, design1, design4)
+test(4.4, construct_design(fpkm_counts, "~0+ .qq"), error="not found")
+
+design1 = construct_design(raw_counts, ~0+condition)
+design2 = construct_design(raw_counts, "~0+condition")
+design3 = construct_design(raw_obj, ~0+condition)
+design4 = construct_design(raw_obj, "~0+condition")
+test(4.5, design1, design2)
+test(4.6, design1, design3)
+test(4.7, design1, design4)
+test(4.8, construct_design(raw_counts, "~0 + .qq"), error="not found")
+
+## contrasts -------------------------------------------------
+contrasts = construct_contrasts(design1, 
+                tA = conditiontreatA-conditioncontrol, 
+                tB = conditiontreatB-conditioncontrol)
+test(5.1, unname(contrasts[, "tA"]), c(-1L, 1L, 0L))
+test(5.2, unname(contrasts[, "tB"]), c(-1L, 0L, 1L))
+test(5.3, rownames(contrasts), c("conditioncontrol", 
+            "conditiontreatA", "conditiontreatB"))
+test(5.4, colnames(contrasts), c("tA", "tB"))
+
+## limma_dge -------------------------------------------------
+# fpkm, limma - between A and control
+limma_fpkm = limma_dge(fpkm_counts, design1, contrasts[, 1L], FALSE)
+nm = c("id", "log2fc", "ave_expr", "t", "pval", "padj", "B", "method")
+
+test(6.1, limma_dge(fpkm_counts), error="design matrix")
+test(6.2, limma_dge(fpkm_counts, design=design), error="design argument")
+test(6.3, limma_dge(fpkm_counts, contrast=contrasts[, 1]), error="contrast")
+test(6.4, limma_dge(fpkm_counts, design, contrasts[, 1], voom="yes"), 
+            error="must be logical")
+test(6.5, inherits(limma_fpkm, "dge"), TRUE)
+test(6.6, "method" %in% names(limma_fpkm), TRUE)
+test(6.7, unique(limma_fpkm[["method"]]), "limma_fpkm")
+test(6.8, names(limma_fpkm), nm)
+test(6.9, limma_fpkm[padj < 0.05, .N], 11L)
+
+# raw, limma - between B and control
+limma_raw = limma_dge(raw_counts, design1, contrasts[, 1L], FALSE)
+limma_voom_raw = limma_dge(raw_counts, design1, contrasts[, 1L], TRUE)
+
+test(6.10, limma_dge(raw_counts), error="design matrix")
+test(6.11, limma_dge(raw_counts, design=design), error="design argument")
+test(6.12, limma_dge(raw_counts, contrast=contrasts[, 1]), error="contrast")
+test(6.13, limma_dge(raw_counts, design, contrasts[, 1], voom="yes"), 
+            error="must be logical")
+test(6.14, inherits(limma_raw, "dge"), TRUE)
+test(6.15, "method" %in% names(limma_raw), TRUE)
+test(6.16, unique(limma_raw[["method"]]), "limma_raw")
+test(6.17, names(limma_raw), nm)
+test(6.18, limma_raw[padj < 0.05, .N], 13L)
+
+test(6.19, limma_dge(raw_counts), error="design matrix")
+test(6.20, limma_dge(raw_counts, design=design), error="design argument")
+test(6.21, limma_dge(raw_counts, contrast=contrasts[, 1]), error="contrast")
+test(6.22, limma_dge(raw_counts, design, contrasts[, 1], voom="yes"), 
+            error="must be logical")
+test(6.23, inherits(limma_voom_raw, "dge"), TRUE)
+test(6.24, "method" %in% names(limma_voom_raw), TRUE)
+test(6.25, unique(limma_voom_raw[["method"]]), "limma_voom_raw")
+test(6.26, names(limma_voom_raw), nm)
+test(6.27, limma_voom_raw[padj < 0.05, .N], 13L)
+
+ans = length(intersect(limma_fpkm[padj<0.05, id], 
+                        limma_voom_raw[padj < 0.05, id]))
+test(6.28, ans, 11L) # all genes de in fpkm interesect with raw. check!
+
+## edger_dge -------------------------------------------------
+edger_raw = edger_dge(raw_counts, design1, contrasts[, 1L])
+nm = c("id", "log2fc", "logcpm", "lr", "pval", "padj", "method")
+
+test(6.29, edger_dge(raw_counts), error="design matrix")
+test(6.30, edger_dge(raw_counts, design=design), error="design argument")
+test(6.31, edger_dge(raw_counts, contrast=contrasts[, 1]), error="contrast")
+test(6.32, inherits(edger_raw, "dge"), TRUE)
+test(6.33, "method" %in% names(edger_raw), TRUE)
+test(6.34, unique(edger_raw[["method"]]), "edger_raw")
+test(6.35, names(edger_raw), nm)
+test(6.36, edger_raw[padj < 0.05, .N], 15L)
+
+ans = length(intersect(limma_voom_raw[padj<0.05, id], 
+                        edger_raw[padj < 0.05, id]))
+test(6.37, ans, 13L) # limma more conservative (as expected) but 
+                     # all limma de intersect with edgeR's
+
+## volcano_plot ----------------------------------------------
+test(7.1, volcano_plot(limma_fpkm, interactive="yes"), error="must be")
+# Not sure how to test plotting functions. Errors will be caught by 
+# ggplot2/plotly anyway.
+
+# test to ensure volcano plot works fine when there is *no* significant DGE
+test(7.2, class(volcano_plot(limma_fpkm[padj>0.05])), c("gg", "ggplot"))
+# this test just checks that it runs without error on *all padj>0.05*
+
+## test summary ----------------------------------------------
+options(warn=0L)
+plat = paste("endian=",.Platform$endian,", sizeof(long double)==",
+                    .Machine$sizeof.longdouble,sep="")
+if (nfail > 0) {
+    if (nfail>1) {s1="s";s2="s: "} else {s1="";s2=" "}
+    cat("\r")
+    stop(nfail," error",s1," out of ",ntest, " (lastID=",
+        lastnum,", ",plat, ") in inst/tests/tests.Rraw on ",
+        date(),". Search tests.Rraw for test number",s2,
+        paste(whichfail,collapse=", "),".")
+    # important to stop() here, so that 'R CMD check' fails
+}
+cat("\rAll ",ntest," tests (lastID=",lastnum,
+    ") in inst/tests/tests.Rraw completed ok in ",
+    timetaken(started.at)," on ",
+    date()," (",plat,")\n",sep="")

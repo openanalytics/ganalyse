@@ -1,0 +1,25 @@
+# v0.1
+
+## Features
+
+1. `rnaseq()` function loads sample info for a particular experiment. It 
+returns a `fpkm` or `raw` object.
+
+2. `gather_counts()` collects counts for all samples and returns `fpkm_counts` 
+or `raw_counts` object respectively.
+
+3. `show_counts()` is a useful function to inspect the loaded read counts.
+
+4. `construct_design()` and `construct_contrasts()` allow construction of 
+design matrix and various contrasts.
+
+5. `limma_dge()` and `edger_dge()` methods allow performing DE analysis by 
+providing `fpkm_counts` or `raw_counts` along with a design matrix and 
+contrast.
+
+6. `volcano_plot()` allows plotting of volcano plots from `dge` objects which 
+are returned by `edger_dge()` and `limma_dge()` methods.
+
+7. `write_dge()` is a simple wrapper to write `dge` objects to a `tsv` file.
+
+## Bug fixes

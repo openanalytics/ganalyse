@@ -1,0 +1,37 @@
+Package: ganalyse
+Title: Easy Analysis of RNASeq DE
+Version: 0.99.0
+Authors@R: c(
+    person("Arunkumar", "Srinivasan", , "asrinivasan@openanalytics.eu", 
+    c("aut", "cre")), person("Open Analytics", role = "cph"))
+Maintainer: Arunkumar Srinivasan <asrinivasan@openanalytics.eu>
+Depends:
+    R (>= 3.3)
+Imports:
+    tools,
+    grDevices,
+    stats,
+    utils,
+    methods,
+    data.table (>= 1.9.6),
+    Biobase,
+    limma,
+    edgeR
+Suggests:
+    knitr,
+    gread,
+    gcount,
+    esetVis,
+    DESeq2,
+    ggplot2,
+    RColorBrewer,
+    ggrepel,
+    plotly,
+    htmltools
+Description: R-package that aims to make analysing genomics data easier.
+    Implemented for RNA-Seq data at the moment.
+License: GPL-3
+VignetteBuilder: knitr
+LazyData: true
+RoxygenNote: 5.0.1
+biocViews: Sequencing, RNASeq, DifferentialExpression, GeneExpression, Software
