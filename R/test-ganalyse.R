@@ -31,7 +31,7 @@ test_ganalyse <- function(verbose=FALSE, pkg="pkg", silent=FALSE) {
     if (exists("test_ganalyse", .GlobalEnv, inherits=FALSE)) { # package developer
         if ("package:ganalyse" %in% search()) stop("ganalyse package loaded")
         if (.Platform$OS.type == "unix") {
-            d = path.expand("~/Documents/oa-git/ganalyse/inst/tests")
+            d = path.expand("~/Documents/oa-github/ganalyse/inst/tests")
         }
     } else { # user
         d = paste(getNamespaceInfo("ganalyse", "path"), "/tests", sep="")
